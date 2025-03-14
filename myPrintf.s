@@ -5,24 +5,25 @@
     _start:
 
         lea rsi, message                         ; rsi = &message
-        call myPrintf   
+        call myPuts   
 
         call exit0
     ;----------------------------------------------------------------------------------------------
 
 
     ;----------------------------------------------------------------------------------------------
-    myPrintf:    
+    myPuts:    
     ;   Function myPrintf is used to display text on the screen
     ;   Entry:   rsi - message, that should be displayed on the screen
-    ;   Destr:   rax - ret value in function myStrlen - number of system call sys_write
+    ;   Destr:   rax - number of system call sys_write
     ;            rdi - value for "repne scasb" in function myStrlen - file descriptor for standard output (stdout)
     ;            rdx - length of the line displayed on the screen
+    ;            rcx - ret value in function myStrlen
     ;   Ret:     None 
         mov rdi, rsi                             ; rdi = rsi = &message
-        call myStrlen                            ; rax = strlen(message)
+        call myStrlen                            ; rcx = strlen(message)
 
-        mov rdx, rax                             ; rdx = strlen(Hello world) + strlen(\n) = 11 + 2 ; ------ 
+        mov rdx, rcx                             ; rdx = strlen(Hello world) + strlen(\n) = 11 + 2 ; ------ 
         mov rax, 1                               ; sys_write                                       ; output
         mov rdi, 1                               ; stdout                                          ; to    
         syscall                                  ; system call                                     ; screen
@@ -35,9 +36,9 @@
     myStrlen:
     ;   Function myStrlen is used to count the number of characters in a string
     ;   Entry:   rdi - string address
-    ;   Destr:   rax - al = 0 for "repne scasb" - ret value
-    ;   Ret:     rax - len of the string
-        push rcx                                 ; save rcx
+    ;   Destr:   rax - al = 0 for "repne scasb"
+    ;            rcx - counter
+    ;   Ret:     rcx - len of the string
 
         xor rcx, rcx                             ; rcx = 0
         dec rcx                                  ; rcx = 0xFFFFFFFF (max)
@@ -48,9 +49,7 @@
 
         neg rcx                                  ; rcx * (-1) [it is len + 1 at the moment]
         dec rcx                                  ; rcx--      [it is len     at the moment]
-        mov rax, rcx                             ; rax = rcx = len
 
-        pop rcx                                  ; save rcx
         ret
     ;----------------------------------------------------------------------------------------------
 
