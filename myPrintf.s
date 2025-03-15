@@ -1,9 +1,25 @@
-    
-    section .text
-    global _start
+    ;----------------------------------------------------------------------------------------------
+    section .data                                                                                 
+
+    cases dq case_d, case_b, case_c, case_per  ; dq для 64-битных адресов
+    defaultCase dq caseDefault              ; Адрес для случая по умолчанию
+
+    messageForDisplaying:
+        db "Hello wor%ld", 10
+
+    ;----------------------------------------------------------------------------------------------
 
 
     ;----------------------------------------------------------------------------------------------
+    section .bss
+
+    buffer resb 100 ; reserve 100 bytes for the array
+    ;----------------------------------------------------------------------------------------------
+    
+    ;----------------------------------------------------------------------------------------------
+    section .text
+    global _start
+
     _start:
 
         lea rsi, messageForDisplaying            ; rsi = &message
@@ -22,14 +38,14 @@
     ;            rcx - [ret myStrlen]
     ;   Ret:     None 
 
-        mov rbx, buffer                       ; create address of buffer (rbx)
+        mov rbx, buffer                          ; create address of buffer (rbx)
 
         mov rdi, rsi                             ; rdi = rsi = &message
         call myStrlen                            ; rcx = strlen(message)
 
         call fillBuffer
 
-        mov rsi, buffer 
+        mov rsi, buffer                          ; rsi = buffer (ptr)
     putc_loop:
         push rcx                                 ; save rcx because of syscall 
         call myPutc
@@ -55,10 +71,58 @@
         jne notSpecifier                         ; else goto notSpecifier
 
     specifier:                                   ; ___specifier___
-        mov al, '!'
+        inc rbx                                  ; buffer++
+        inc rsi                                  ; message++
+
+
+        mov al, [rsi]                            ; +__________switch buffer[i]__________+
+
+        cmp rax, 'd'                             ; if (buffer[i] == 'd')
+        je case_d                                ;         goto case_d
+        cmp rax, 'b'                             ; if (buffer[i] == 'b')
+        je case_b                                ;         goto case_b
+        cmp rax, 'c'                             ; if (buffer[i] == 'c')
+        je case_c                                ;         goto case_c
+        cmp rax, '%'                             ; if (buffer[i] == '%')
+        je case_per                              ;         goto case_per
+
+        jmp caseDefault                          ; else    goto caseDefaout
+
+    case_d:                                      ; ___case_d___
+        mov al, 'D'                 
         mov [rbx], al
         inc rbx
         inc rsi
+        jmp switchEnd
+
+    case_b:                                      ; ___case_b___
+        mov al, 'B'                 
+        mov [rbx], al
+        inc rbx
+        inc rsi
+        jmp switchEnd
+
+    case_c:   
+        mov al, 'C'                 
+        mov [rbx], al
+        inc rbx
+        inc rsi                                   ; ___case_c___
+        jmp switchEnd
+
+    case_per:                                    ; ___case_per___
+        mov al, '%'
+        mov [rbx], al
+        inc rbx
+        inc rsi
+        jmp switchEnd
+
+    caseDefault:                                 ; ___caseDefault___
+        inc rsi
+        jmp switchEnd
+
+    switchEnd:                                  ; +__________switchEnd__________+
+
+
         jmp endOfCycle
 
     notSpecifier:                                ; ___notSpecifier___
@@ -130,19 +194,4 @@
         syscall                                  ; system call  ;
 
     ret
-    ;----------------------------------------------------------------------------------------------
-
-   
-    ;----------------------------------------------------------------------------------------------
-    section .data                                                                                 
-
-    messageForDisplaying:
-        db "Hello wo%rld", 10
-    ;----------------------------------------------------------------------------------------------
-
-
-    ;----------------------------------------------------------------------------------------------
-    section .bss
-
-    buffer resb 100 ; reserve 100 bytes for the array
     ;----------------------------------------------------------------------------------------------
