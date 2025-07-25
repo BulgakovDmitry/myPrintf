@@ -5,7 +5,7 @@
     ;cases:                dq case_blue, case_per, case_reset  ; dq для 64-битных адресов
     defaultCase:          dq caseDefault              ; Адрес для случая по умолчанию
     itoaBuffer:           db "00000000000000000000", 0
-    messageForDisplaying: db "Hello %b wo %g rld", 3
+    messageForDisplaying: db "hello world", 3
     blueColor           : db "\033[1;34m", 0
     whiteColor          : db "\033[1;37m", 0
     resetColor          : db "\033[0m", 0
@@ -26,22 +26,12 @@
     
     ;----------------------------------------------------------------------------------------------
     section .text
-    global _start
+    global _mian
 
-    _start:
+    _main:
 
         lea rsi, messageForDisplaying            ; rsi = &message
         call myPrintf
-        ;pop rax
-        ;lea rdi, [itoaBuffer]   ; Загружаем адрес буфера в rdi
-        ;call myItoa           ; Вызываем функцию itoa
-        ;; Выводим строку на экран
-        ;mov rax, 1          ; syscall: write
-        ;mov rdi, 1          ; файловый дескриптор: stdout
-        ;lea rsi, [itoaBuffer]   ; адрес строки
-        ;mov rdx, 20         ; длина строки (максимум 20 символов)
-        ;syscall
-        ;ret
 
         call exit0
     ;----------------------------------------------------------------------------------------------
@@ -78,8 +68,6 @@
     ret
 
     ;----------------------------------------------------------------------------------------------
-    ; lea r9, [blueColor]
-    ; mov r10, lenColor
     codegenCase:
     ;
     ;   Entry:   r9  - nameColor
@@ -103,36 +91,19 @@
     ret
     ;----------------------------------------------------------------------------------------------
 
-    ;----------------------------------------------------------------------------------------------
-
-    ;fillBufferStart:
-    ;    push rdi
-   ; 
-   ;     lea rdi, [greenColor]                     ; rdi = &blueColor;;
-
-    ;    push rcx
-    ;    mov rcx, lenColor
-    ;    fillBufferStartCycle:
-    ;        mov al, byte [rdi]                 ; Чтение символа из colorArray
-    ;        mov byte [rbx], al                 ; Запись символа в buffer
-    ;        inc rdi                            ; Переход к следующему символу в colorArray
-    ;        inc rbx                            ; Переход к следующей позиции в buffer
-    ;;        ;test al, al                        ; Проверка на нулевой терминатор
-    ;        ;jnz copy_loop                     ; Продолжить цикл, если не конец строки
-    ;        loop fillBufferStartCycle  
-    ;    pop rcx
-    ;    pop rdi
-    ;ret
-
+   
     ;----------------------------------------------------------------------------------------------
     fillBuffer:
     ;   
-    ;
+    ;   
     ;
         push rcx                                 ; save len of messageForDisplaying
+    ;dec rsi
+    ;jmp case_white
+
 
     fillBufferCycle:
-        mov al, '%'                              ; al = '%'
+        mov al, '$'                              ; al = '%'
         mov dl, [rsi]                            ; dl = *rsi = *(messageForDisplaying + i)
         cmp dl, al                               ; if (al == dl)
         jne notSpecifier                         ; else goto notSpecifier
@@ -146,33 +117,35 @@
 
         cmp rax, 'b'                             ; if (buffer[i] == 'd')
         je case_blue                                ;         goto case_d
-        cmp rax, 'g'                             ; if (buffer[i] == 'b')
-        je case_green                                ;         goto case_b
-        ;cmp rax, 'R'                             ; if (buffer[i] == 'c')
-        ;je case_reset                                ;         goto case_c
+        ;cmp rax, 'g'                             ; if (buffer[i] == 'b')
+        ;je case_green                                ;         goto case_b
+        cmp rax, 'R'                             ; if (buffer[i] == 'c')
+        je case_reset                                ;         goto case_c
         cmp rax, '%'                             ; if (buffer[i] == '%')
         je case_per                              ;         goto case_per
 
         jmp caseDefault                          ; else    goto caseDefaout
 
     case_blue:                                      ; ___case_blue___
-    
         lea r9, [blueColor]
         mov r10, lenColor
         call codegenCase
         jmp switchEnd
 
-    case_green:                                      ; ___case_green___
-    
-        lea r9, [greenColor]
-        mov r10, lenColor
+    ;case_white:                                      ; ___case_white___
+    ;    lea r9, [whiteColor]
+    ;    mov r10, lenColor
+    ;    call codegenCase
+    ;    jmp switchEnd
+    case_reset:
+        lea r9, [resetColor]
+        mov r10, lenReset
         call codegenCase
         jmp switchEnd
 
-    ;case_reset:                                      ; ___case_green___
-    ;
-    ;    lea r9, [resetColor]
-    ;    mov r10, lenReset
+    ;case_green:                                      ; ___case_green___ 
+    ;    lea r9, [greenColor]
+    ;    mov r10, lenColor
     ;    call codegenCase
     ;    jmp switchEnd
 
@@ -188,7 +161,6 @@
         jmp switchEnd
 
     switchEnd:                                  ; +__________switchEnd__________+
-
         jmp endOfCycle
 
     notSpecifier:                                ; ___notSpecifier___
@@ -199,59 +171,16 @@
         jmp endOfCycle                           ; goto endOfCycle
 
     endOfCycle:
-
         loop fillBufferCycle                     ; while (cx--)
+
+    ;case_reset:
+        ;lea r9, [resetColor]
+        ;mov r10, lenReset
+        ;call codegenCase
+        ;dec rsi
+        ;mov al, 3
+    ;    mov [rbx], al
         pop rcx                                  ; save len of messageForDisplaying
-        ;call myPutc
-
-    ret
-    ;----------------------------------------------------------------------------------------------
-
-
-    ;----------------------------------------------------------------------------------------------
-    myItoa:
-        push rsi
-        push rdi
-        push rax
-        push rcx
-        push rdx
-
-        mov rcx, 10         ; Основание системы счисления (10 для десятичной)
-        mov rsi, rdi        ; Сохраняем адрес буфера в rsi
-        add rsi, 19         ; Перемещаемся в конец буфера
-        mov byte [rsi], 0   ; Записываем нулевой символ (конец строки)
-        dec rsi             ; Перемещаемся на одну позицию влево
-
-        ; Проверяем, если число равно 0
-        cmp rax, 0
-        je .zero_case
-
-    .convert_loop:
-        xor rdx, rdx        ; Очищаем rdx перед делением
-        div rcx             ; Делим rax на 10, остаток в rdx
-        add dl, '0'         ; Преобразуем остаток в символ
-        mov [rsi], dl       ; Сохраняем символ в буфер
-        dec rsi             ; Перемещаемся на одну позицию влево
-        cmp rax, 0          ; Проверяем, если число стало 0
-        jne .convert_loop   ; Если не 0, продолжаем цикл
-
-        ; Если число было 0
-    .zero_case:
-        cmp rsi, rdi        ; Проверяем, если буфер не был использован
-        jae .done           ; Если буфер использован, завершаем
-        mov byte [rsi], '0' ; Записываем '0' в буфер
-
-    .done:
-        ; Сдвигаем результат в начало буфера
-        inc rsi             ; Перемещаемся на начало строки
-        mov rdi, rsi        ; Копируем адрес начала строки в rdi
-        
-        pop rdx
-        pop rcx
-        pop rax
-        pop rdi
-        pop rsi
-
     ret
     ;----------------------------------------------------------------------------------------------
 
