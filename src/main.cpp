@@ -2,7 +2,7 @@
 
 int main() 
 {
-    myPrintf("This is my printf");
+    myPrintf("This is my printf\n");
 
     return 0;
 }
