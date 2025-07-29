@@ -2,7 +2,7 @@
 
 int main() 
 {
-    myPrintf("my printf %o\n", 2025);
+    myPrintf("$ rmy printf $R %s\n", "EEEEE");
 
     return 0;
 } 

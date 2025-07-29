@@ -3,12 +3,18 @@ section .bss
     bufferPosition  resb 1                       ; текущий индекс записи в buffer (позиция)
 
 section .data
+
+    ESC               equ 27                     ; начало esc последовательности
+    SYS_WRITE         equ 1                      ; номер системного вызова write
+    FD_STDOUT         equ 1                      ; дескриптор stdout
+    BUFFER_SIZE       equ 128                    ; размер буфера
+    MAX_SPECIDX       equ 0x53                   ; диапазон jump таблицы
+    MAX_SPECIDX_COLOR equ 0x55                   ; диапазон jump таблицы цветов
+
     hexTable db "0123456789ABCDEF"               ; шестадцатиричные символы для %x
 
-    SYS_WRITE   equ 1                            ; номер системного вызова write
-    FD_STDOUT   equ 1                            ; дескриптор stdout
-    BUFFER_SIZE equ 128                          ; размер буфера
-    MAX_SPECIDX equ 0x53                         ; диапазон jump таблицы
+    redColor   db ESC, "[1;31m", 0               ; 
+    resetColor db ESC, "[0m", 0
 
     jumpTable:                                   ; jump таблица                    
                 dq percent                       ;     '%'
@@ -22,6 +28,24 @@ section .data
                 dq str                           ;     's'
     times 4     dq invalid
                 dq hex                           ;     'x'
+    
+    jumpTableColor:                              ; jump таблица для цветов
+                dq dollar                        ;      '$'
+    times 45    dq invalid                       ;
+                dq reset                         ;      'R'
+    times 15    dq invalid                       ;
+                dq blue                          ;      'b'
+                dq cean                          ;      'c'
+    times 3     dq invalid                       ;
+                dq green                         ;      'g'
+    times 5     dq invalid                       ;
+                dq mang                          ;      'm'
+    times 4     dq invalid                       ;
+                dq red                           ;      'r'
+    times 4     dq invalid                       ;
+                dq white                         ;      'w'
+                dq invalid                       ;
+                dq yellow                        ;      'y'
 
 section .text
     global myPrintf
@@ -94,6 +118,13 @@ section .text
 
 
     colorSpecificator:
+        inc   rax                                ; rax = fmt
+        xor rdx, rdx                             ; обнуляем rdx
+        mov dl, byte [rax]                       ; положим в dl спецификатор
+        sub   edx, '$'                           ; вычитание кода '%' для джамп таблицы
+        cmp   edx, MAX_SPECIDX_COLOR             ; проверка диапазона таблицы
+        ja    invalid                            ; неизвестный символ  ошибка
+        jmp   [jumpTableColor + rdx*8]           ; прямое разветвление
 
     mainCycleEnd :
         call  flush                              ; flush()
@@ -128,7 +159,7 @@ section .text
 ;==================================================================================================
 ; ___________________________flush_________________________________________________________________ 
 ; DESCRIPTION: function to flush the buffer
-; ENTRY:       
+; ENTRY:       node
 ; EXIT:        none
 ; DESTROY:     none
 ;==================================================================================================
@@ -294,7 +325,7 @@ section .text
     %endmacro
 
 ;==================================================================================================
-;____________________________PRINT_NUMBERS_________________________________________________________ 
+;____________________________PRINT_OF_SPECIFICATORS________________________________________________ 
 ;==================================================================================================
     printDecimalNumber:
         push rcx                                 ; сохраняем 
@@ -361,7 +392,7 @@ section .text
         mov   dl, al                             ; al уже '0'…'7', кладем al в dl
         call  myPutc                             ; myPutc(dl)
         dec   rcx                                ; уменьшаем количество цифр в стеке, так как мы вывели число
-        jmp   printOctal                         ; goto printHexadecimal // возобновляем цикл
+        jmp   printOctal                         ; goto printOctal // возобновляем цикл
 
     printOctalEnd:
         pop   rbx                                ; возвращаем сохраненные
@@ -369,5 +400,106 @@ section .text
         ret
 
     printBinaryNumber:
+        push rcx                                 ; сохраняем используемые
+        push rbx                                 ; регистры в стек
+
+        xor   rcx, rcx                           ; обнуляем счетчик rcx
+        EXTRACT 2,1,0x1                          ; извлечь bin‑цифры
+
+    printBinary:
+        cmp   rcx, 0                             ; if (количество цифр в стеке [rcx] == 0)
+        je    printBinaryEnd                     ;     goto end
+        pop   rax                                ; берём очередную цифру
+        mov   dl, al                             ; AL = '0' или '1', положим его в dl
+        call  myPutc                             ; myPutc(dl)
+        dec   rcx                                ; уменьшаем количество цифр в стеке, так как мы вывели число
+        jmp   printBinary                        ; goto printBinary // возобновляем цикл
+
+    printBinaryEnd:
+        pop   rbx                                ; возвращаем сохраненные
+        pop   rcx                                ; регистры из стека
+        ret
 
     printString:
+            push rcx                             ; сохраняем RCX (счётчик)
+
+    printStr:
+        mov   cl, [rax]                          ; полодим в cl первый символ строки [*rax]
+        test  cl, cl                             ; if (cl == '\0')
+        jz    printStrEnd                        ;     goto end
+        mov   dl, cl                             ; положим в dl этот символ
+        call  myPutc                             ; myPutc(dl)
+        inc   rax                                ; переходим к следующему символу
+        jmp   printStr                           ; goto printStr // возобновляем цикл
+
+    printStrEnd:
+        pop   rcx                                ; восстанавливаем сохраненные регистры из стека
+        ret
+
+;==================================================================================================
+; ___________________________PRINT_COLOR___________________________________________________________ 
+; DESCRIPTION: print const string
+; ENTRY:       r11 (str ptr)
+; EXIT:        none
+; DESTROY:     
+;==================================================================================================
+    printColor:
+            push    rbx                
+
+            mov     rbx, r11           ; положим в rbx адрес первого элемента массива 
+
+    printCycle:  
+            mov     dl, [rbx]          ; положим в dl символ массива по адресу rbx
+            test    dl, dl             ; if (strcmp(dl, "\0") == 0)
+            jz      printEnd           ;     goto end
+            call    myPutc             ; myPutc(dl)
+            inc     rbx                ; array++
+            jmp     printCycle         ; возобновляем цикл
+
+    printEnd:  
+            pop     rbx
+            ret
+
+;==================================================================================================
+;____________________________COLOR_SPECIFICATORS___________________________________________________ 
+;==================================================================================================
+    dollar:
+        mov   dl, '$'                            ; dl = '%'
+        call  myPutc                             ; myPutc(dl)
+        inc   rax                                ; fmt++
+        inc   rcx                                ; счётчик напечатанных символов увеличиваем на 1          
+        jmp   mainCycle                          ; возвращаемся в главный цикл
+
+    reset:
+        lea r11, [rel resetColor]
+        call printColor
+
+        inc   rax                                ; fmt++
+        add   rcx, 7                             ; счётчик напечатанных символов увеличиваем на len(resetColor) = 7     
+        jmp   mainCycle                          ; возвращаемся в главный цикл
+
+    blue:
+        jmp   mainCycle                          ; возвращаемся в главный цикл
+
+    cean:
+        jmp   mainCycle                          ; возвращаемся в главный цикл
+
+    green:
+        jmp   mainCycle                          ; возвращаемся в главный цикл
+
+    mang:
+        jmp   mainCycle                          ; возвращаемся в главный цикл
+
+    red:
+        lea r11, [rel redColor]
+        call printColor
+
+        inc   rax                                ; fmt++
+        add   rcx, 10                            ; счётчик напечатанных символов увеличиваем на len(redColor) = 10 
+        jmp   mainCycle                          ; возвращаемся в главный цикл
+
+    white:
+        jmp   mainCycle                          ; возвращаемся в главный цикл
+
+    yellow:
+        jmp   mainCycle                          ; возвращаемся в главный цикл
