@@ -12,7 +12,7 @@ section .data
 
     jumpTable:                                   ; jump таблица                    
                 dq percent                       ;     '%'
-    times 60    dq invalid                       ;     пропуски до 'b'
+    times 60    dq invalid                       ;     
                 dq bin                           ;     'b'
                 dq char                          ;     'c'
                 dq dec                           ;     'd'
@@ -235,16 +235,16 @@ section .text
         jmp   mainCycle                          ; вернемся в главный цикл
 
     bin:      
-        push  rax
+        push  rax                                ; сохраняем в стек fmt
 
-        mov   rax, [rbx]
-        call  printBinaryNumber
+        mov   rax, [rbx]                         ; rax = аргумент
+        call  printBinaryNumber                  ; печать числа
 
-        pop   rax
+        pop   rax                                ; возвращаем из стека fmt
 
-        NEXT_ARG
-        inc   rax                        
-        jmp   mainCycle
+        NEXT_ARG                                 ; rbx = & следующего аргумента
+        inc   rax                                ; fmt++
+        jmp   mainCycle                          ; вернемся в главный цикл
 
     str:         
         push  rax                                ; сохраняем в стек fmt
@@ -255,9 +255,9 @@ section .text
 
         pop   rax                                ; возвращаем из стека fmt
 
-        NEXT_ARG
-        inc   rax                                      
-        jmp   mainCycle
+        NEXT_ARG                                 ; rbx = & следующего аргумента
+        inc   rax                                ; fmt++  
+        jmp   mainCycle                          ; вернемся в главный цикл
 
     invalid:                                     ; неизвестный спецификатор
         mov   rcx, -1                            ; rcx = -1 (код ошибки)
@@ -327,8 +327,46 @@ section .text
         ret
 
     printHexadecimalNumber:
+        push rcx                                 ; сохраняем используемые
+        push rbx                                 ; регистры в стек
+
+        xor   rcx, rcx                           ; обнуляем счетчик rcx
+        EXTRACT 16,4,0xF                         ; извлечь hex‑цифры
+
+    printHexadecimal:
+        cmp   rcx, 0                             ; if (количество цифр в стеке [rcx] == 0)
+        je    printHexadecimalEnd                ;     goto end
+        pop   rax                                ; берём очередную цифру
+        mov   dl, al                             ; al уже символ 0…F, положим его в dl
+        call  myPutc                             ; myPutc(dl)
+        dec   rcx                                ; уменьшаем количество цифр в стеке, так как мы вывели число
+        jmp   printHexadecimal                   ; goto printHexadecimal // возобновляем цикл
+
+    printHexadecimalEnd:
+        pop   rbx                                ; возвращаем сохраненные
+        pop   rcx                                ; регистры из стека
+        ret
 
     printOctalNumber:
+        push rcx                                 ; сохраняем используемые
+        push rbx                                 ; регистры в стек
+
+        xor   rcx, rcx                           ; обнуляем счетчик rcx
+        EXTRACT 8,3,0x7                          ; извлечь oct‑цифры
+
+    printOctal:
+        cmp   rcx, 0                             ; if (количество цифр в стеке [rcx] == 0)
+        je    printOctalEnd                      ;     goto end
+        pop   rax                                ; берём очередную цифру
+        mov   dl, al                             ; al уже '0'…'7', кладем al в dl
+        call  myPutc                             ; myPutc(dl)
+        dec   rcx                                ; уменьшаем количество цифр в стеке, так как мы вывели число
+        jmp   printOctal                         ; goto printHexadecimal // возобновляем цикл
+
+    printOctalEnd:
+        pop   rbx                                ; возвращаем сохраненные
+        pop   rcx                                ; регистры из стека
+        ret
 
     printBinaryNumber:
 
