@@ -8,7 +8,20 @@ section .data
     SYS_WRITE   equ 1                            ; номер системного вызова write
     FD_STDOUT   equ 1                            ; дескриптор stdout
     BUFFER_SIZE equ 128                          ; размер буфера
-    MAX_SPECIDX equ 0x53   
+    MAX_SPECIDX equ 0x53                         ; диапазон jump таблицы
+
+    jumpTable:                                   ; jump таблица                    
+                dq percent                       ;     '%'
+    times 60    dq invalid                       ;     пропуски до 'b'
+                dq bin                           ;     'b'
+                dq char                          ;     'c'
+                dq dec                           ;     'd'
+    times 10    dq invalid
+                dq oct                           ;     'o'
+    times 3     dq invalid
+                dq str                           ;     's'
+    times 4     dq invalid
+                dq hex                           ;     'x'
 
 section .text
     global myPrintf
@@ -19,13 +32,13 @@ section .text
 ; DESCRIPTION: stores the first 6 arguments in registers and starts parsing arguments
 ; ENTRY:       rdi, rsi, rcx, rdx, r8, r9
 ; EXIT:        rax (number of characters printed or -1 in case of error)
-; DESTROY:     r10, rax, rsp
+; DESTROY:     r10, rsp
 ;==================================================================================================
     myPrintf:
         push r9                                  ; аргумент 6
         push r8                                  ; аргумент 5
-        push rdx                                 ; аргумент 4
-        push rcx                                 ; аргумент 3
+        push rcx                                 ; аргумент 4
+        push rdx                                 ; аргумент 3
         push rsi                                 ; аргумент 2
         push rdi                                 ; аргумент 1
 
@@ -41,7 +54,7 @@ section .text
 ; ___________________________parse_________________________________________________________________  
 ; DESCRIPTION: main cycle in which buffer parsing takes place
 ; ENTRY:       rsp
-; EXIT:        none
+; EXIT:        rax (number of characters printed or -1 in case of error)
 ; DESTROY:     rax, rbx, rcx, rdx 
 ;==================================================================================================
     parse:
@@ -71,6 +84,14 @@ section .text
         jmp   mainCycle                          ;     возобновляем цикл для следующего символа
 
     specificator:
+        inc   rax                                ; rax = fmt
+        xor rdx, rdx                             ; обнуляем rdx
+        mov dl, byte [rax]                       ; положим в dl спецификатор
+        sub   edx, '%'                           ; вычитание кода '%' для джамп таблицы
+        cmp   edx, MAX_SPECIDX                   ; проверка диапазона таблицы
+        ja    invalid                            ; неизвестный символ  ошибка
+        jmp   [jumpTable + rdx*8]                ; прямое разветвление
+
 
     colorSpecificator:
 
@@ -136,3 +157,179 @@ section .text
         pop   rdi                                ;   | регистры
         pop   rax                                ;   | из стека
         ret                                      ; выход
+
+;==================================================================================================
+; ___________________________NEXT_ARG______________________________________________________________ 
+; DESCRIPTION: transitions to the next argument,
+;              if you come across a slot with the RET address, skip it
+; ENTRY:       none
+; EXIT:        none
+; DESTROY:     rbx
+;==================================================================================================
+    %macro NEXT_ARG 0
+        add   rbx, 8                             ; rbx следующий слот
+        cmp   rbx, r10                           ; if (rbx != return addr)
+        jne   %%ok                               ;     goto ok
+        add   rbx, 8                             ; else skip return addr
+    %%ok:
+    %endmacro
+
+;==================================================================================================
+;____________________________SPECIFICATORS_________________________________________________________ 
+;==================================================================================================
+    percent:    
+        mov   dl, '%'                            ; dl = '%'
+        call  myPutc                             ; myPutc(dl)
+        inc   rax                                ; fmt++
+        inc   rcx                                ; счётчик напечатанных символов увеличиваем на 1                     
+        jmp   mainCycle                          ; возвращаемся в главный цикл
+
+    char:                            
+        push  rax                                ; сохраняем в стек fmt
+
+        mov   rax, [rbx]                         ; rax = аргумент
+        mov   dl, al                             ; dl  = символ
+        call  myPutc                             ; myPutc(dl)
+
+        pop   rax                                ; возвращаем из стека fmt
+
+        NEXT_ARG                                 ; rbx = & следующего аргумента
+        inc   rax                                ; fmt++
+        inc   rcx                                ; счётчик напечатанных символов увеличим на 1
+        jmp   mainCycle                          ; вернемся в главный цикл
+
+    dec:      
+        push  rax                                ; сохраняем в стек fmt
+
+        mov   rax, [rbx]                         ; rax = аргумент
+        call  printDecimalNumber                 ; печать числа
+
+        pop   rax                                ; возвращаем из стека fmt
+
+        NEXT_ARG                                 ; rbx = & следующего аргумента
+        inc   rax                                ; fmt++
+        jmp   mainCycle                          ; вернемся в главный цикл
+
+    hex:                
+        push  rax                                ; сохраняем в стек fmt
+
+        mov   rax, [rbx]                         ; rax = аргумент
+        call  printHexadecimalNumber             ; печать числа
+
+        pop   rax                                ; возвращаем из стека fmt
+
+        NEXT_ARG                                 ; rbx = & следующего аргумента
+        inc   rax                                ; fmt++
+        jmp   mainCycle                          ; вернемся в главный цикл
+
+    oct: 
+        push  rax                                ; сохраняем в стек fmt
+
+        mov   rax, [rbx]                         ; rax = аргумент
+        call  printOctalNumber                   ; печать числа
+
+        pop   rax                                ; возвращаем из стека fmt
+
+        NEXT_ARG                                 ; rbx = & следующего аргумента
+        inc   rax                                ; fmt++
+        jmp   mainCycle                          ; вернемся в главный цикл
+
+    bin:      
+        push  rax
+
+        mov   rax, [rbx]
+        call  printBinaryNumber
+
+        pop   rax
+
+        NEXT_ARG
+        inc   rax                        
+        jmp   mainCycle
+
+    str:         
+        push  rax                                ; сохраняем в стек fmt
+
+
+        mov   rax, [rbx]                         ; rax = ptr строки
+        call  printString                        ; печать строки
+
+        pop   rax                                ; возвращаем из стека fmt
+
+        NEXT_ARG
+        inc   rax                                      
+        jmp   mainCycle
+
+    invalid:                                     ; неизвестный спецификатор
+        mov   rcx, -1                            ; rcx = -1 (код ошибки)
+        jmp   mainCycleEnd                       ; завершаем главный цикл с текущим кодом ошибки
+
+;==================================================================================================
+; ___________________________EXTRACT_______________________________________________________________ 
+; DESCRIPTION: extract the number of numbers in the stack (common to all bases)
+; ENTRY:       3 numbers (macro args)
+; EXIT:        none
+; DESTROY:     rdx, rbx, rax
+;==================================================================================================
+    %macro EXTRACT 3                             ; #define EXTRACT(base, shift, mask)
+    %%loop:
+        %if %1 = 10                              ; if (base == 10)
+            xor  rdx, rdx                        ;     rdx = 0  // подготовка перед делением
+            mov  rbx, 10                         ;     rbx = 10 // делитель
+            div  rbx                             ;     rax /= 10, rdx %= 10
+            push rdx                             ;     кладём цифру (0…9) в стек
+        %else                                    ; else
+            mov  rdx, rax                        ;     rdx = rax = само число
+            and  rdx, %3                         ;     маской оставляем младший разряд
+            %if %1 = 16                          ;     if (base == 16)
+                mov  dl, [hexTable + rdx]        ;         dl = символ 0…F
+            %else                                ;     else
+                add  dl, '0'                     ;         dl = '0' + цифра
+            %endif                               ;     endif
+            push rdx                             ;     кладём цифру в стек
+            shr  rax, %2                         ;     сдвигаем исходное число
+        %endif                                   ; endif
+        inc  rcx                                 ; увеличиваем счётчик цифр
+        test rax, rax                            ; if (rax != 0) // закончилось ли число
+        jnz  %%loop                              ;     goto loop (еще итерация)
+    %endmacro
+
+;==================================================================================================
+;____________________________PRINT_NUMBERS_________________________________________________________ 
+;==================================================================================================
+    printDecimalNumber:
+        push rcx                                 ; сохраняем 
+        push rdx                                 ; регистры
+        push rbx                                 ; в стек
+
+        xor   rcx, rcx                           ; счётчик цифр в стеке = 0
+        cmp   rax, 0                             ; if (число >= 0)?
+        jge   extractDec                         ;     goto extractDec
+        neg   rax                                ; else число = -число // делаем его положительным
+        mov   dl, '-'                            ;    dl = '-'      //  печатаем
+        call  myPutc                             ;    myPutc(dl)    //  минус
+
+    extractDec:                                  ; извлечение цифр десятичного
+        EXTRACT 10,0,0                           ; числа в стек (маска не требуется)
+
+    printDecimal:
+        cmp   rcx, 0                             ; if (количество цифр в стеке [rcx] == 0)
+        je    printDecimalEnd                    ;     goto end
+        pop   rax                                ; берём очередную цифру
+        add   al, '0'                            ; al = '0' + цифра
+        mov   dl, al                             ; dl = al = ASCII цифры для вывода
+        call  myPutc                             ; myPutc(dl)
+        dec   rcx                                ; уменьшаем количество цифр в стеке, так как мы вывели число
+        jmp   printDecimal                       ; goto printDecimal // возобновляем цикл
+    printDecimalEnd:
+        pop   rbx                                ; возвращаем 
+        pop   rdx                                ; регистры 
+        pop   rcx                                ; из стека
+        ret
+
+    printHexadecimalNumber:
+
+    printOctalNumber:
+
+    printBinaryNumber:
+
+    printString:
