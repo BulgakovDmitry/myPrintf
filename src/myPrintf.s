@@ -13,8 +13,14 @@ section .data
 
     hexTable db "0123456789ABCDEF"               ; шестадцатиричные символы для %x
 
-    redColor   db ESC, "[1;31m", 0               ; 
-    resetColor db ESC, "[0m", 0
+    resetColor  db ESC, "[0m", 0                 ; цветовой код (цветовое завершение)
+    blueColor   db ESC, "[1;34m", 0              ; цветовой код (синий)
+    ceanColor   db ESC, "[1;36m", 0              ; цветовой код (голубой)
+    greenColor  db ESC, "[1;32m", 0              ; цветовой код (зеленый)
+    mangColor   db ESC, "[1;35m", 0              ; цветовой код (красный)
+    redColor    db ESC, "[1;31m", 0              ; цветовой код (фиолетовый)
+    whiteColor  db ESC, "[1;37m", 0              ; цветовой код (белый)
+    yellowColor db ESC, "[1;33m", 0              ; цветовой код (желтый)
 
     jumpTable:                                   ; jump таблица                    
                 dq percent                       ;     '%'
@@ -121,9 +127,9 @@ section .text
         inc   rax                                ; rax = fmt
         xor rdx, rdx                             ; обнуляем rdx
         mov dl, byte [rax]                       ; положим в dl спецификатор
-        sub   edx, '$'                           ; вычитание кода '%' для джамп таблицы
+        sub   edx, '$'                           ; вычитание кода '$' для джамп таблицы
         cmp   edx, MAX_SPECIDX_COLOR             ; проверка диапазона таблицы
-        ja    invalid                            ; неизвестный символ  ошибка
+        ja    invalid                            ; неизвестный символ - ошибка
         jmp   [jumpTableColor + rdx*8]           ; прямое разветвление
 
     mainCycleEnd :
@@ -138,7 +144,7 @@ section .text
 ; EXIT:        none
 ; DESTROY:     none
 ;==================================================================================================
-    myPutc :                             
+    myPutc:                             
         push rbx                                 ; сохраняем в стеке rbx
 
         xor rbx, rbx                             ; обнуляем rbx
@@ -147,7 +153,8 @@ section .text
         cmp   ebx, BUFFER_SIZE-1                 ; if (BUFFER_SIZE-1 != rbx)
         jb    writeSymbol                        ;     goto writeSymbol
         call  flush                              ; else flush()
-        xor   ebx, ebx                           ; после сброса буфера кладем в rbx (позиция буффера) новую позицию 0     
+        xor   ebx, ebx                           ; после сброса буфера кладем в rbx (позиция буффера) новую позицию 0 
+
     writeSymbol:
         mov   [buffer + rbx], dl                 ; сохраняем dl в буфере
         inc   bl                                 ; позиция++
@@ -444,7 +451,7 @@ section .text
 ; DESTROY:     
 ;==================================================================================================
     printColor:
-            push    rbx                
+            push    rbx                ; сохранение регистра в стек
 
             mov     rbx, r11           ; положим в rbx адрес первого элемента массива 
 
@@ -457,8 +464,21 @@ section .text
             jmp     printCycle         ; возобновляем цикл
 
     printEnd:  
-            pop     rbx
+            pop     rbx                ; возвращение регистра из стека
             ret
+
+;==================================================================================================
+; ___________________________PRINT_COLOR_SPEC______________________________________________________ 
+; DESCRIPTION: print color and inc fmt & count
+; ENTRY:       r11 (color ptr)
+; EXIT:        none
+; DESTROY:     none
+;==================================================================================================
+    %macro PRINT_COLOR_SPEC 0                            
+        call printColor                          ; printf("%s", r11);
+        inc   rax                                ; fmt++
+        add   rcx, 10                            ; счётчик напечатанных символов увеличиваем на len(Color) = 10 
+    %endmacro
 
 ;==================================================================================================
 ;____________________________COLOR_SPECIFICATORS___________________________________________________ 
@@ -472,34 +492,42 @@ section .text
 
     reset:
         lea r11, [rel resetColor]
-        call printColor
-
+        call printColor                          ; printf("%s", r11);
         inc   rax                                ; fmt++
         add   rcx, 7                             ; счётчик напечатанных символов увеличиваем на len(resetColor) = 7     
         jmp   mainCycle                          ; возвращаемся в главный цикл
 
-    blue:
+    blue:                                   
+        lea r11, [rel blueColor]                 ; кладем в r11 адрес массива, который нужно вывести
+        PRINT_COLOR_SPEC                         ; напечатать цвет, инкременторовать счетчики
         jmp   mainCycle                          ; возвращаемся в главный цикл
 
     cean:
+        lea r11, [rel ceanColor]                 ; кладем в r11 адрес массива, который нужно вывести
+        PRINT_COLOR_SPEC                         ; напечатать цвет, инкременторовать счетчики
         jmp   mainCycle                          ; возвращаемся в главный цикл
 
     green:
+        lea r11, [rel greenColor]                ; кладем в r11 адрес массива, который нужно вывести
+        PRINT_COLOR_SPEC                         ; напечатать цвет, инкременторовать счетчики
         jmp   mainCycle                          ; возвращаемся в главный цикл
 
     mang:
+        lea r11, [rel mangColor]                 ; кладем в r11 адрес массива, который нужно вывести
+        PRINT_COLOR_SPEC                         ; напечатать цвет, инкременторовать счетчики
         jmp   mainCycle                          ; возвращаемся в главный цикл
 
     red:
-        lea r11, [rel redColor]
-        call printColor
-
-        inc   rax                                ; fmt++
-        add   rcx, 10                            ; счётчик напечатанных символов увеличиваем на len(redColor) = 10 
+        lea r11, [rel redColor]                  ; кладем в r11 адрес массива, который нужно вывести
+        PRINT_COLOR_SPEC                         ; напечатать цвет, инкременторовать счетчики
         jmp   mainCycle                          ; возвращаемся в главный цикл
 
     white:
+        lea r11, [rel whiteColor]                ; кладем в r11 адрес массива, который нужно вывести
+        PRINT_COLOR_SPEC                         ; напечатать цвет, инкременторовать счетчики
         jmp   mainCycle                          ; возвращаемся в главный цикл
 
     yellow:
+        lea r11, [rel yellowColor]               ; кладем в r11 адрес массива, который нужно вывести
+        PRINT_COLOR_SPEC                         ; напечатать цвет, инкременторовать счетчики
         jmp   mainCycle                          ; возвращаемся в главный цикл
