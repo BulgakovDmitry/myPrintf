@@ -2,9 +2,7 @@
   <img src="docs/myPrintfPicREADME.png" alt="PRINTF Banner" width="800">
   
   # 🛡️ printf implementation in nasm
-  ![GitHub code size](https://img.shields.io/github/languages/code-size/BulgakovDmitry/myPrintf)
-  ![GitHub last commit](https://img.shields.io/github/last-commit/BulgakovDmitry/myPrintf)
-  
+  ![GitHub code size](https://img.shields.io/github/languages/code-size/BulgakovDmitry/myPrintf)  
 </div>
 
 ## 🚀 Quick Start
